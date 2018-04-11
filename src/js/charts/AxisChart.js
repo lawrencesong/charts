@@ -1,3 +1,4 @@
+/* eslint-disable */
 import BaseChart from './BaseChart';
 import { dataPrep, zeroDataPrep, getShortenedLabels } from '../utils/axis-chart-utils';
 import { Y_AXIS_MARGIN } from '../utils/constants';

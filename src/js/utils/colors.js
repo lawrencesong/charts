@@ -1,3 +1,4 @@
+/* eslint-disable */
 const PRESET_COLOR_MAP = {
 	'light-blue': '#7cd6fd',
 	'blue': '#5e64ff',

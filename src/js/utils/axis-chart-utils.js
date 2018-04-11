@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { fillArray } from '../utils/helpers';
 import { DEFAULT_AXIS_CHART_TYPE, AXIS_DATASET_CHART_TYPES, DEFAULT_CHAR_WIDTH } from '../utils/constants';
 
