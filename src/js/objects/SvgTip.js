@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { $ } from '../utils/dom';
 
 export default class SvgTip {

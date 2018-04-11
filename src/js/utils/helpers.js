@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { ANGLE_RATIO } from './constants';
 
 /**

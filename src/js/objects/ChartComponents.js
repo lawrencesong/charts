@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { makeSVGGroup } from '../utils/draw';
 import { makePath, xLine, yLine, yMarker, yRegion, datasetBar, datasetDot, getPaths } from '../utils/draw';
 import { equilizeNoOfElements } from '../utils/draw-utils';

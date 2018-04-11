@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { getBarHeightAndYAttr } from './draw-utils';
 import { getStringWidth } from './helpers';
 import { DOT_OVERLAY_SIZE_INCR } from './constants';
