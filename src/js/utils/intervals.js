@@ -73,7 +73,7 @@ function getChartIntervals(maxValue, minValue=0) {
 	return intervals;
 }
 
-export function calcChartIntervals(values, withMinimum=false) {
+export function calcChartIntervals(values, withMinimum=false, options = {}) {
 	//*** Where the magic happens ***
 
 	// Calculates best-fit y intervals from given values
@@ -81,6 +81,8 @@ export function calcChartIntervals(values, withMinimum=false) {
 
 	let maxValue = Math.max(...values);
 	let minValue = Math.min(...values);
+  if (options.yAxisMaxValue) maxValue = Math.max(maxValue, options.yAxisMaxValue);
+  if (options.yAxisMinValue) minValue = Math.min(minValue, options.yAxisMinValue);
 
 	// Exponent to be used for pretty print
 	let exponent = 0, intervals = []; // eslint-disable-line no-unused-vars
@@ -121,15 +123,15 @@ export function calcChartIntervals(values, withMinimum=false) {
 
 		let absMinValue = Math.abs(minValue);
 
-		if(maxValue >= absMinValue) {
+		// if(maxValue >= absMinValue) {
 			exponent = normalize(maxValue)[1];
 			intervals = getPositiveFirstIntervals(maxValue, absMinValue);
-		} else {
-			// Mirror: maxValue => absMinValue, then change sign
-			exponent = normalize(absMinValue)[1];
-			let posIntervals = getPositiveFirstIntervals(absMinValue, maxValue);
-			intervals = posIntervals.map(d => d * (-1));
-		}
+		// } else {
+		// 	// Mirror: maxValue => absMinValue, then change sign
+		// 	exponent = normalize(absMinValue)[1];
+		// 	let posIntervals = getPositiveFirstIntervals(absMinValue, maxValue);
+		// 	intervals = posIntervals.map(d => d * (-1));
+		// }
 
 	}
 

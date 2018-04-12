@@ -36,6 +36,9 @@ export default class AxisChart extends BaseChart {
 		this.config.formatTooltipY = args.tooltipOptions.formatTooltipY;
 
 		this.config.valuesOverPoints = args.valuesOverPoints;
+
+		this.config.yAxisMaxValue = args.yAxisMaxValue;
+		this.config.yAxisMinValue = args.yAxisMinValue;
 	}
 
 	setMargins() {
@@ -80,7 +83,10 @@ export default class AxisChart extends BaseChart {
 	}
 
 	calcYAxisParameters(dataValues, withMinimum = 'false') {
-		const yPts = calcChartIntervals(dataValues, withMinimum);
+		const yPts = calcChartIntervals(dataValues, withMinimum, {
+			yAxisMaxValue: this.config.yAxisMaxValue,
+			yAxisMinValue: this.config.yAxisMinValue
+		});
 		const scaleMultiplier = this.height / getValueRange(yPts);
 		const intervalHeight = getIntervalSize(yPts) * scaleMultiplier;
 		const zeroLine = this.height - (getZeroIndex(yPts) * intervalHeight);
