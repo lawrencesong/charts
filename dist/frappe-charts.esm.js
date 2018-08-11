@@ -206,11 +206,30 @@ class SvgTip {
 	}
 }
 
-const VERT_SPACE_OUTSIDE_BASE_CHART = 50;
-const TRANSLATE_Y_BASE_CHART = 20;
-const LEFT_MARGIN_BASE_CHART = 60;
-const RIGHT_MARGIN_BASE_CHART = 40;
-const Y_AXIS_MARGIN = 60;
+const ALL_CHART_TYPES = ['line', 'scatter', 'bar', 'percentage', 'heatmap', 'pie'];
+
+const COMPATIBLE_CHARTS = {
+	bar: ['line', 'scatter', 'percentage', 'pie'],
+	line: ['scatter', 'bar', 'percentage', 'pie'],
+	pie: ['line', 'scatter', 'percentage', 'bar'],
+	percentage: ['bar', 'line', 'scatter', 'pie'],
+	heatmap: []
+};
+
+const DATA_COLOR_DIVISIONS = {
+	bar: 'datasets',
+	line: 'datasets',
+	pie: 'labels',
+	percentage: 'labels',
+	heatmap: HEATMAP_DISTRIBUTION_SIZE
+};
+
+const BASE_CHART_TOP_MARGIN = 10;
+const BASE_CHART_LEFT_MARGIN = 20;
+const BASE_CHART_RIGHT_MARGIN = 20;
+
+const Y_AXIS_LEFT_MARGIN = 60;
+const Y_AXIS_RIGHT_MARGIN = 40;
 
 const INIT_CHART_UPDATE_TIMEOUT = 700;
 const CHART_POST_ANIMATE_TIMEOUT = 400;
@@ -229,6 +248,25 @@ const DEFAULT_CHAR_WIDTH = 7;
 // Universal constants
 const ANGLE_RATIO = Math.PI / 180;
 const FULL_ANGLE = 360;
+
+// Fixed 5-color theme,
+// More colors are difficult to parse visually
+const HEATMAP_DISTRIBUTION_SIZE = 5;
+
+const HEATMAP_SQUARE_SIZE = 10;
+const HEATMAP_GUTTER_SIZE = 2;
+
+const HEATMAP_COLORS = ['#ebedf0', '#c6e48b', '#7bc96f', '#239a3b', '#196127'];
+const DEFAULT_CHART_COLORS = ['light-blue', 'blue', 'violet', 'red', 'orange',
+	'yellow', 'green', 'light-green', 'purple', 'magenta', 'light-grey', 'dark-grey'];
+
+const DEFAULT_COLORS = {
+	bar: DEFAULT_CHART_COLORS,
+	line: DEFAULT_CHART_COLORS,
+	pie: DEFAULT_CHART_COLORS,
+	percentage: DEFAULT_CHART_COLORS,
+	heatmap: HEATMAP_COLORS
+};
 
 function floatTwo(d) {
 	return parseFloat(d.toFixed(2));
@@ -446,13 +484,13 @@ function makeHeatSquare(className, x, y, size, fill='none', data={}) {
 	return createSVG("rect", args);
 }
 
-function makeText(className, x, y, content) {
+function makeText(className, x, y, content, fontSize = FONT_SIZE) {
 	return createSVG('text', {
 		className: className,
 		x: x,
 		y: y,
-		dy: (FONT_SIZE / 2) + 'px',
-		'font-size': FONT_SIZE + 'px',
+		dy: (fontSize / 2) + 'px',
+		'font-size': fontSize + 'px',
 		innerHTML: content
 	});
 }
@@ -792,6 +830,25 @@ let makeOverlay = {
 			overlay.setAttribute('transform', transformValue);
 		}
 		return overlay;
+	},
+
+	'heat_square': (unit) => {
+		let transformValue;
+		if(unit.nodeName !== 'circle') {
+			transformValue = unit.getAttribute('transform');
+			unit = unit.childNodes[0];
+		}
+		let overlay = unit.cloneNode();
+		let radius = unit.getAttribute('r');
+		let fill = unit.getAttribute('fill');
+		overlay.setAttribute('r', parseInt(radius) + DOT_OVERLAY_SIZE_INCR);
+		overlay.setAttribute('fill', fill);
+		overlay.style.opacity = '0.6';
+
+		if(transformValue) {
+			overlay.setAttribute('transform', transformValue);
+		}
+		return overlay;
 	}
 };
 
@@ -830,7 +887,25 @@ let updateOverlay = {
 		if(transformValue) {
 			overlay.setAttribute('transform', transformValue);
 		}
-	}
+	},
+
+	'heat_square': (unit, overlay) => {
+		let transformValue;
+		if(unit.nodeName !== 'circle') {
+			transformValue = unit.getAttribute('transform');
+			unit = unit.childNodes[0];
+		}
+		let attributes = ['cx', 'cy'];
+		Object.values(unit.attributes)
+			.filter(attr => attributes.includes(attr.name) && attr.specified)
+			.map(attr => {
+				overlay.setAttribute(attr.name, attr.nodeValue);
+			});
+
+		if(transformValue) {
+			overlay.setAttribute('transform', transformValue);
+		}
+	},
 };
 
 const PRESET_COLOR_MAP = {
@@ -849,9 +924,6 @@ const PRESET_COLOR_MAP = {
 	'light-grey': '#f0f4f7',
 	'dark-grey': '#b8c2cc'
 };
-
-const DEFAULT_COLORS = ['light-blue', 'blue', 'violet', 'red', 'orange',
-	'yellow', 'green', 'light-green', 'purple', 'magenta', 'light-grey', 'dark-grey'];
 
 function limitColor(r){
 	if (r > 255) return 255;
@@ -881,51 +953,6 @@ function isValidColor(string) {
 const getColor = (color) => {
 	return PRESET_COLOR_MAP[color] || color;
 };
-
-const ALL_CHART_TYPES = ['line', 'scatter', 'bar', 'percentage', 'heatmap', 'pie'];
-
-const COMPATIBLE_CHARTS = {
-	bar: ['line', 'scatter', 'percentage', 'pie'],
-	line: ['scatter', 'bar', 'percentage', 'pie'],
-	pie: ['line', 'scatter', 'percentage', 'bar'],
-	scatter: ['line', 'bar', 'percentage', 'pie'],
-	percentage: ['bar', 'line', 'scatter', 'pie'],
-	heatmap: []
-};
-
-// Needs structure as per only labels/datasets
-const COLOR_COMPATIBLE_CHARTS = {
-	bar: ['line', 'scatter'],
-	line: ['scatter', 'bar'],
-	pie: ['percentage'],
-	scatter: ['line', 'bar'],
-	percentage: ['pie'],
-	heatmap: []
-};
-
-function getDifferentChart(type, current_type, parent, args) {
-	if(type === current_type) return;
-
-	if(!ALL_CHART_TYPES.includes(type)) {
-		console.error(`'${type}' is not a valid chart type.`);
-	}
-
-	if(!COMPATIBLE_CHARTS[current_type].includes(type)) {
-		console.error(`'${current_type}' chart cannot be converted to a '${type}' chart.`);
-	}
-
-	// whether the new chart can use the existing colors
-	const useColor = COLOR_COMPATIBLE_CHARTS[current_type].includes(type);
-
-	// Okay, this is anticlimactic
-	// this function will need to actually be 'changeChartType(type)'
-	// that will update only the required elements, but for now ...
-
-	args.type = type;
-	args.colors = useColor ? args.colors : undefined;
-
-	return new Chart(parent, args);
-}
 
 const UNIT_ANIM_DUR = 350;
 const PATH_ANIM_DUR = 350;
@@ -1147,21 +1174,26 @@ function runSMILAnimation(parent, svgElement, elementsToAnimate) {
 
 class BaseChart {
 	constructor(parent, options) {
-		this.rawChartArgs = options;
 
-		this.parent = typeof parent === 'string' ? document.querySelector(parent) : parent;
+		this.parent = typeof parent === 'string'
+			? document.querySelector(parent)
+			: parent;
+
 		if (!(this.parent instanceof HTMLElement)) {
 			throw new Error('No `parent` element to render on was provided.');
 		}
 
+		this.rawChartArgs = options;
+
 		this.title = options.title || '';
-		this.subtitle = options.subtitle || '';
 		this.argHeight = options.height || 240;
 		this.type = options.type || '';
 
 		this.realData = this.prepareData(options.data);
 		this.data = this.prepareFirstData(this.realData);
-		this.colors = [];
+
+		this.colors = this.validateColors(options.colors, this.type);
+
 		this.config = {
 			showTooltip: 1, // calculate
 			showLegend: options.showLegend || 1,
@@ -1180,8 +1212,7 @@ class BaseChart {
 		this.configure(options);
 	}
 
-	configure(args) {
-		this.setColors(args);
+	configure() {
 		this.setMargins();
 
 		// Bind window events
@@ -1189,45 +1220,32 @@ class BaseChart {
 		window.addEventListener('orientationchange', () => this.draw(true));
 	}
 
-	setColors() {
-		let args = this.rawChartArgs;
-
-		// Needs structure as per only labels/datasets, from config
-		const list = args.type === 'percentage' || args.type === 'pie'
-			? args.data.labels
-			: args.data.datasets;
-
-		if(!args.colors || (list && args.colors.length < list.length)) {
-			this.colors = DEFAULT_COLORS;
-		} else {
-			this.colors = args.colors;
-		}
-
-		this.colors = this.colors.map(color => getColor(color));
+	validateColors(colors, type) {
+		const validColors = [];
+		colors = (colors || []).concat(DEFAULT_COLORS[type]);
+		colors.forEach((string) => {
+			const color = getColor(string);
+			if(!isValidColor(color)) {
+				console.warn('"' + string + '" is not a valid color.');
+			} else {
+				validColors.push(color);
+			}
+		});
+		return validColors;
 	}
 
 	setMargins() {
 		let height = this.argHeight;
 		this.baseHeight = height;
-		this.height = height - VERT_SPACE_OUTSIDE_BASE_CHART;
-		this.translateY = TRANSLATE_Y_BASE_CHART;
+		this.height = height - 70;
+		this.topMargin = BASE_CHART_TOP_MARGIN;
 
 		// Horizontal margins
-		this.leftMargin = LEFT_MARGIN_BASE_CHART;
-		this.rightMargin = RIGHT_MARGIN_BASE_CHART;
-	}
-
-	validate() {
-		return true;
+		this.leftMargin = BASE_CHART_LEFT_MARGIN;
+		this.rightMargin = BASE_CHART_RIGHT_MARGIN;
 	}
 
 	setup() {
-		if(this.validate()) {
-			this._setup();
-		}
-	}
-
-	_setup() {
 		this.makeContainer();
 		this.makeTooltip();
 
@@ -1239,25 +1257,17 @@ class BaseChart {
 	}
 
 	makeContainer() {
-		this.container = $.create('div', {
-			className: 'chart-container',
-			innerHTML: `<h6 class="title">${this.title}</h6>
-				<h6 class="sub-title uppercase">${this.subtitle}</h6>
-				<div class="frappe-chart graphics"></div>
-				<div class="graph-stats-container"></div>`
-		});
-
 		// Chart needs a dedicated parent element
 		this.parent.innerHTML = '';
-		this.parent.appendChild(this.container);
-
-		this.chartWrapper = this.container.querySelector('.frappe-chart');
-		this.statsWrapper = this.container.querySelector('.graph-stats-container');
+		this.container = $.create('div', {
+			inside: this.parent,
+			className: 'chart-container'
+		});
 	}
 
 	makeTooltip() {
 		this.tip = new SvgTip({
-			parent: this.chartWrapper,
+			parent: this.container,
 			colors: this.colors
 		});
 		this.bindTooltip();
@@ -1266,8 +1276,8 @@ class BaseChart {
 	bindTooltip() {}
 
 	draw(onlyWidthChange=false, init=false) {
-		this.calcWidth();
 		this.calc(onlyWidthChange);
+		this.updateWidth();
 		this.makeChartArea();
 		this.setupComponents();
 
@@ -1277,7 +1287,7 @@ class BaseChart {
 
 		if(init) {
 			this.data = this.realData;
-			setTimeout(() => {this.update();}, this.initTimeout);
+			setTimeout(() => {this.update(this.data);}, this.initTimeout);
 		}
 
 		if(!onlyWidthChange) {
@@ -1287,12 +1297,15 @@ class BaseChart {
 		this.setupNavigation(init);
 	}
 
-	calcWidth() {
+	updateWidth() {
 		this.baseWidth = getElementContentWidth(this.parent);
 		this.width = this.baseWidth - (this.leftMargin + this.rightMargin);
 	}
 
-	update(data=this.data) {
+	update(data) {
+		if(!data) {
+			console.error('No data to update.');
+		}
 		this.data = this.prepareData(data);
 		this.calc(); // builds state
 		this.render();
@@ -1320,7 +1333,7 @@ class BaseChart {
 			elementsToAnimate = elementsToAnimate.concat(c.update(animate));
 		});
 		if(elementsToAnimate.length > 0) {
-			runSMILAnimation(this.chartWrapper, this.svg, elementsToAnimate);
+			runSMILAnimation(this.container, this.svg, elementsToAnimate);
 			setTimeout(() => {
 				components.forEach(c => c.make());
 				this.updateNav();
@@ -1333,38 +1346,55 @@ class BaseChart {
 
 	updateNav() {
 		if(this.config.isNavigable) {
-			// if(!this.overlayGuides){
 			this.makeOverlay();
 			this.bindUnits();
-			// } else {
-			// 	this.updateOverlay();
-			// }
 		}
 	}
 
 	makeChartArea() {
 		if(this.svg) {
-			this.chartWrapper.removeChild(this.svg);
+			this.container.removeChild(this.svg);
+		}
+
+		let titleAreaHeight = 0;
+		let legendAreaHeight = 0;
+		if(this.title.length) {
+			titleAreaHeight = 30;
+		}
+		if(this.showLegend) {
+			legendAreaHeight = 30;
 		}
 		this.svg = makeSVGContainer(
-			this.chartWrapper,
-			'chart',
+			this.container,
+			'frappe-chart chart',
 			this.baseWidth,
-			this.baseHeight
+			this.baseHeight + titleAreaHeight + legendAreaHeight
 		);
 		this.svgDefs = makeSVGDefs(this.svg);
 
-		// I WISH !!!
-		// this.svg = makeSVGGroup(
-		// 	svgContainer,
-		// 	'flipped-coord-system',
-		// 	`translate(0, ${this.baseHeight}) scale(1, -1)`
-		// );
+		if(this.title.length) {
+			this.titleEL = makeText(
+				'title',
+				this.leftMargin - AXIS_TICK_LENGTH,
+				this.topMargin,
+				this.title,
+				11
+			);
+			this.svg.appendChild(this.titleEL);
+		}
 
+		let top = this.topMargin + titleAreaHeight;
 		this.drawArea = makeSVGGroup(
 			this.svg,
 			this.type + '-chart',
-			`translate(${this.leftMargin}, ${this.translateY})`
+			`translate(${this.leftMargin}, ${top})`
+		);
+
+		top = this.baseHeight + titleAreaHeight;
+		this.legendArea = makeSVGGroup(
+			this.svg,
+			'chart-legend',
+			`translate(${this.leftMargin}, ${top})`
 		);
 	}
 
@@ -1385,7 +1415,7 @@ class BaseChart {
 			};
 
 			document.addEventListener('keydown', (e) => {
-				if(isElementInViewport(this.chartWrapper)) {
+				if(isElementInViewport(this.container)) {
 					e = e || window.event;
 					if(this.keyActions[e.keyCode]) {
 						this.keyActions[e.keyCode]();
@@ -1415,7 +1445,34 @@ class BaseChart {
 	updateDataset() {}
 
 	getDifferentChart(type) {
-		return getDifferentChart(type, this.type, this.parent, this.rawChartArgs);
+		const currentType = this.type;
+		let args = this.rawChartArgs;
+		if(type === currentType) return;
+
+		if(!ALL_CHART_TYPES.includes(type)) {
+			console.error(`'${type}' is not a valid chart type.`);
+		}
+
+		if(!COMPATIBLE_CHARTS[currentType].includes(type)) {
+			console.error(`'${currentType}' chart cannot be converted to a '${type}' chart.`);
+		}
+
+		// whether the new chart can use the existing colors
+		const useColor = DATA_COLOR_DIVISIONS[currentType] === DATA_COLOR_DIVISIONS[type];
+
+		// Okay, this is anticlimactic
+		// this function will need to actually be 'changeChartType(type)'
+		// that will update only the required elements, but for now ...
+
+		args.type = type;
+		args.colors = useColor ? args.colors : undefined;
+
+		return new Chart(this.parent, args);
+	}
+
+	unbindWindowEvents(){
+		window.removeEventListener('resize', () => this.draw(true));
+		window.removeEventListener('orientationchange', () => this.draw(true));
 	}
 }
 
@@ -1466,26 +1523,26 @@ class AggregationChart extends BaseChart {
 	}
 
 	renderLegend() {
-		let s = this.state;
+		// let s = this.state;
 
-		this.statsWrapper.textContent = '';
+		// this.statsWrapper.textContent = '';
 
-		this.legendTotals = s.sliceTotals.slice(0, this.config.maxLegendPoints);
+		// this.legendTotals = s.sliceTotals.slice(0, this.config.maxLegendPoints);
 
-		let xValues = s.labels;
-		this.legendTotals.map((d, i) => {
-			if(d) {
-				let stats = $.create('div', {
-					className: 'stats',
-					inside: this.statsWrapper
-				});
-				stats.innerHTML = `<span class="indicator">
-					<i style="background: ${this.colors[i]}"></i>
-					<span class="text-muted">${xValues[i]}:</span>
-					${d}
-				</span>`;
-			}
-		});
+		// let xValues = s.labels;
+		// this.legendTotals.map((d, i) => {
+		// 	if(d) {
+		// 		let stats = $.create('div', {
+		// 			className: 'stats',
+		// 			inside: this.statsWrapper
+		// 		});
+		// 		stats.innerHTML = `<span class="indicator">
+		// 			<i style="background: ${this.colors[i]}"></i>
+		// 			<span class="text-muted">${xValues[i]}:</span>
+		// 			${d}
+		// 		</span>`;
+		// 	}
+		// });
 	}
 }
 
@@ -1498,16 +1555,16 @@ class PercentageChart extends AggregationChart {
 	}
 
 	makeChartArea() {
-		this.chartWrapper.className += ' ' + 'graph-focus-margin';
-		this.chartWrapper.style.marginTop = '45px';
+		this.container.className += ' ' + 'graph-focus-margin';
+		this.container.style.marginTop = '45px';
 
-		this.statsWrapper.className += ' ' + 'graph-focus-margin';
-		this.statsWrapper.style.marginBottom = '30px';
-		this.statsWrapper.style.paddingTop = '0px';
+		// this.statsWrapper.className += ' ' + 'graph-focus-margin';
+		// this.statsWrapper.style.marginBottom = '30px';
+		// this.statsWrapper.style.paddingTop = '0px';
 
 		this.svg = $.create('div', {
 			className: 'div',
-			inside: this.chartWrapper
+			inside: this.container
 		});
 
 		this.chart = $.create('div', {
@@ -1542,12 +1599,12 @@ class PercentageChart extends AggregationChart {
 	bindTooltip() {
 		let s = this.state;
 
-		this.chartWrapper.addEventListener('mousemove', (e) => {
+		this.container.addEventListener('mousemove', (e) => {
 			let slice = e.target;
 			if(slice.classList.contains('progress-bar')) {
 
 				let i = slice.getAttribute('data-index');
-				let gOff = getOffset(this.chartWrapper), pOff = getOffset(slice);
+				let gOff = getOffset(this.container), pOff = getOffset(slice);
 
 				let x = pOff.left - gOff.left + slice.offsetWidth/2;
 				let y = pOff.top - gOff.top - 6;
@@ -2056,8 +2113,8 @@ class PieChart extends AggregationChart {
 	}
 
 	bindTooltip() {
-		this.chartWrapper.addEventListener('mousemove', this.mouseMove);
-		this.chartWrapper.addEventListener('mouseleave', this.mouseLeave);
+		this.container.addEventListener('mousemove', this.mouseMove);
+		this.container.addEventListener('mouseleave', this.mouseLeave);
 	}
 
 	mouseMove(e){
@@ -2083,9 +2140,20 @@ class PieChart extends AggregationChart {
 
 // Playing around with dates
 
+const NO_OF_YEAR_MONTHS = 12;
+const NO_OF_DAYS_IN_WEEK = 7;
+
+const NO_OF_MILLIS = 1000;
+const SEC_IN_DAY = 86400;
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+	"July", "August", "September", "October", "November", "December"];
+
+
+
 // https://stackoverflow.com/a/11252167/6495043
-function treatAsUtc(dateStr) {
-	let result = new Date(dateStr);
+function treatAsUtc(date) {
+	let result = new Date(date);
 	result.setMinutes(result.getMinutes() - result.getTimezoneOffset());
 	return result;
 }
@@ -2100,13 +2168,35 @@ function getDdMmYyyy(date) {
 	].join('-');
 }
 
-function getWeeksBetween(startDateStr, endDateStr) {
-	return Math.ceil(getDaysBetween(startDateStr, endDateStr) / 7);
+function clone(date) {
+	return new Date(date.getTime());
 }
 
-function getDaysBetween(startDateStr, endDateStr) {
-	let millisecondsPerDay = 24 * 60 * 60 * 1000;
-	return (treatAsUtc(endDateStr) - treatAsUtc(startDateStr)) / millisecondsPerDay;
+
+
+
+
+function getWeeksBetween(startDate, endDate) {
+	return Math.ceil(getDaysBetween(startDate, endDate) / NO_OF_DAYS_IN_WEEK);
+}
+
+function getDaysBetween(startDate, endDate) {
+	let millisecondsPerDay = SEC_IN_DAY * NO_OF_MILLIS;
+	return (treatAsUtc(endDate) - treatAsUtc(startDate)) / millisecondsPerDay;
+}
+
+function getMonthName(i, short=false) {
+	let monthName = MONTH_NAMES[i];
+	return short ? monthName.slice(0, 3) : monthName;
+}
+
+// mutates
+function setDayToSunday(date) {
+	const day = date.getDay();
+	if(day !== NO_OF_DAYS_IN_WEEK) {
+		addDays(date, (-1) * day);
+	}
+	return date;
 }
 
 // mutates
@@ -2325,78 +2415,26 @@ function getMaxCheckpoint(value, distribution) {
 	return distribution.filter(d => d < value).length;
 }
 
+const COL_WIDTH = HEATMAP_SQUARE_SIZE + HEATMAP_GUTTER_SIZE;
+const ROW_HEIGHT = COL_WIDTH;
+const DAY_INCR = 1;
+
 class Heatmap extends BaseChart {
 	constructor(parent, options) {
 		super(parent, options);
-
 		this.type = 'heatmap';
 
-		this.domain = options.domain || '';
-		this.subdomain = options.subdomain || '';
-		this.data = options.data || {};
 		this.discreteDomains = options.discreteDomains === 0 ? 0 : 1;
 		this.countLabel = options.countLabel || '';
 
-		let today = new Date();
-		this.start = options.start || addDays(today, 365);
-
-		let legendColors = (options.legendColors || []).slice(0, 5);
-		this.legendColors = this.validate_colors(legendColors)
-			? legendColors
-			: ['#ebedf0', '#c6e48b', '#7bc96f', '#239a3b', '#196127'];
-
-		// Fixed 5-color theme,
-		// More colors are difficult to parse visually
-		this.distribution_size = 5;
-
-		this.translateX = 0;
 		this.setup();
 	}
 
-	setMargins() {
-		super.setMargins();
-		this.leftMargin = 10;
-		this.translateY = 10;
-	}
-
-	validate_colors(colors) {
-		if(colors.length < 5) return 0;
-
-		let valid = 1;
-		colors.forEach(function(string) {
-			if(!isValidColor(string)) {
-				valid = 0;
-				console.warn('"' + string + '" is not a valid color.');
-			}
-		}, this);
-
-		return valid;
-	}
-
-	configure() {
-		super.configure();
-		this.today = new Date();
-
-		if(!this.start) {
-			this.start = new Date();
-			this.start.setFullYear( this.start.getFullYear() - 1 );
-		}
-		this.firstWeekStart = new Date(this.start.toDateString());
-		this.lastWeekStart = new Date(this.today.toDateString());
-		if(this.firstWeekStart.getDay() !== 7) {
-			addDays(this.firstWeekStart, (-1) * this.firstWeekStart.getDay());
-		}
-		if(this.lastWeekStart.getDay() !== 7) {
-			addDays(this.lastWeekStart, (-1) * this.lastWeekStart.getDay());
-		}
-		this.no_of_cols = getWeeksBetween(this.firstWeekStart + '', this.lastWeekStart + '') + 1;
-	}
-
-	calcWidth() {
-		this.baseWidth = (this.no_of_cols + 3) * 12 ;
+	updateWidth() {
+		this.baseWidth = (this.state.noOfWeeks + 99) * COL_WIDTH;
 
 		if(this.discreteDomains) {
-			this.baseWidth += (12 * 12);
+			this.baseWidth += (COL_WIDTH * NO_OF_YEAR_MONTHS);
 		}
 	}
 
@@ -2405,112 +2443,114 @@ class Heatmap extends BaseChart {
 		this.domainLabelGroup = makeSVGGroup(this.drawArea,
 			'domain-label-group chart-label');
 
-		this.dataGroups = makeSVGGroup(this.drawArea,
+		this.colGroups = makeSVGGroup(this.drawArea,
 			'data-groups',
 			`translate(0, 20)`
 		);
+	}
 
-		this.container.querySelector('.title').style.display = 'None';
-		this.container.querySelector('.sub-title').style.display = 'None';
-		this.container.querySelector('.graph-stats-container').style.display = 'None';
-		this.chartWrapper.style.marginTop = '0px';
-		this.chartWrapper.style.paddingTop = '0px';
+	prepareData(data=this.data) {
+		if(data.start && data.end && data.start > data.end) {
+			throw new Error('Start date cannot be greater than end date.');
+		}
+
+		if(!data.start) {
+			data.start = new Date();
+			data.start.setFullYear( data.start.getFullYear() - 1 );
+		}
+		if(!data.end) { data.end = new Date(); }
+		data.dataPoints = data.dataPoints || {};
+
+		if(parseInt(Object.keys(data.dataPoints)[0]) > 100000) {
+			let points = {};
+			Object.keys(data.dataPoints).forEach(timestampSec$$1 => {
+				let date = new Date(timestampSec$$1 * NO_OF_MILLIS);
+				points[getDdMmYyyy(date)] = data.dataPoints[timestampSec$$1];
+			});
+			data.dataPoints = points;
+		}
+
+		return data;
 	}
 
 	calc() {
+		let s = this.state;
 
-		let dataValues = Object.keys(this.data).map(key => this.data[key]);
-		this.distribution = calcDistribution(dataValues, this.distribution_size);
+		s.start = this.data.start;
+		s.end = this.data.end;
 
-		this.monthNames = ["January", "February", "March", "April", "May", "June",
-			"July", "August", "September", "October", "November", "December"
-		];
+		s.firstWeekStart = setDayToSunday(clone(s.start));
+		s.noOfWeeks = getWeeksBetween(s.firstWeekStart, s.end);
+		s.distribution = calcDistribution(
+			Object.values(this.data.dataPoints), HEATMAP_DISTRIBUTION_SIZE);
+	}
+
+	update(data) {
+		if(!data) {
+			console.error('No data to update.');
+		}
+		this.data = this.prepareData(data);
+		this.draw();
+		this.bindTooltip();
 	}
 
 	render() {
-		this.renderAllWeeksAndStoreXValues(this.no_of_cols);
-	}
-
-	renderAllWeeksAndStoreXValues(no_of_weeks) {
-		// renderAllWeeksAndStoreXValues
 		this.domainLabelGroup.textContent = '';
-		this.dataGroups.textContent = '';
+		this.colGroups.textContent = '';
 
-		let currentWeekSunday = new Date(this.firstWeekStart);
-		this.weekCol = 0;
+		let currentWeekSunday = new Date(this.state.firstWeekStart);
+		this.currentWeekCol = 0;
 		this.currentMonth = currentWeekSunday.getMonth();
 
 		this.months = [this.currentMonth + ''];
 		this.monthWeeks = {}, this.monthStartPoints = [];
 		this.monthWeeks[this.currentMonth] = 0;
-		this.monthStartPoints.push(13);
 
-		for(var i = 0; i < no_of_weeks; i++) {
-			let dataGroup, monthChange = 0;
+		for(var i = 0; i < this.state.noOfWeeks; i++) {
+			let colGroup, monthChange = 0;
 			let day = new Date(currentWeekSunday);
 
-			[dataGroup, monthChange] = this.get_week_squares_group(day, this.weekCol);
-			this.dataGroups.appendChild(dataGroup);
-			this.weekCol += 1 + parseInt(this.discreteDomains && monthChange);
+			[colGroup, monthChange] = this.getWeekSquaresGroup(day, this.currentWeekCol);
+			this.colGroups.appendChild(colGroup);
+			this.currentWeekCol += 1 + parseInt(this.discreteDomains && monthChange);
 			this.monthWeeks[this.currentMonth]++;
 			if(monthChange) {
-				this.currentMonth = (this.currentMonth + 1) % 12;
+				this.currentMonth = (this.currentMonth + 1) % NO_OF_YEAR_MONTHS;
 				this.months.push(this.currentMonth + '');
 				this.monthWeeks[this.currentMonth] = 1;
 			}
-			addDays(currentWeekSunday, 7);
+			addDays(currentWeekSunday, NO_OF_DAYS_IN_WEEK);
 		}
-		this.render_month_labels();
+		this.renderMonthLabels();
 	}
 
-	get_week_squares_group(currentDate, index) {
-		const noOfWeekdays = 7;
-		const squareSide = 10;
-		const cellPadding = 2;
-		const step = 1;
-		const todayTime = this.today.getTime();
-
+	getWeekSquaresGroup(currentDate, currentWeekCol) {
 		let monthChange = 0;
 		let weekColChange = 0;
 
-		let dataGroup = makeSVGGroup(this.dataGroups, 'data-group');
+		let colGroup = makeSVGGroup(this.colGroups, 'data-group');
 
-		for(var y = 0, i = 0; i < noOfWeekdays; i += step, y += (squareSide + cellPadding)) {
-			let dataValue = 0;
-			let colorIndex = 0;
+		for(var y = 0, i = 0; i < NO_OF_DAYS_IN_WEEK; i += DAY_INCR, y += ROW_HEIGHT) {
+			let ddmmyyyy = getDdMmYyyy(currentDate);
+			let dataValue = this.data.dataPoints[ddmmyyyy] || 0;
+			let colorIndex = getMaxCheckpoint(dataValue, this.state.distribution);
 
-			let currentTimestamp = currentDate.getTime()/1000;
-			let timestamp = Math.floor(currentTimestamp - (currentTimestamp % 86400)).toFixed(1);
-
-			if(this.data[timestamp]) {
-				dataValue = this.data[timestamp];
-			}
-
-			if(this.data[Math.round(timestamp)]) {
-				dataValue = this.data[Math.round(timestamp)];
-			}
-
-			if(dataValue) {
-				colorIndex = getMaxCheckpoint(dataValue, this.distribution);
-			}
-
-			let x = 13 + (index + weekColChange) * 12;
+			let x = (currentWeekCol + weekColChange) * COL_WIDTH;
 
 			let dataAttr = {
-				'data-date': getDdMmYyyy(currentDate),
+				'data-date': ddmmyyyy,
 				'data-value': dataValue,
 				'data-day': currentDate.getDay()
 			};
 
-			let heatSquare = makeHeatSquare('day', x, y, squareSide,
-				this.legendColors[colorIndex], dataAttr);
+			let heatSquare = makeHeatSquare('day', x, y, HEATMAP_SQUARE_SIZE,
+				this.colors[colorIndex], dataAttr);
 
-			dataGroup.appendChild(heatSquare);
+			colGroup.appendChild(heatSquare);
 
 			let nextDate = new Date(currentDate);
 			addDays(nextDate, 1);
-			if(nextDate.getTime() > todayTime) break;
-
+			if(nextDate > this.state.end) break;
 
 			if(nextDate.getMonth() - currentDate.getMonth()) {
 				monthChange = 1;
@@ -2518,17 +2558,17 @@ class Heatmap extends BaseChart {
 					weekColChange = 1;
 				}
 
-				this.monthStartPoints.push(13 + (index + weekColChange) * 12);
+				this.monthStartPoints.push((currentWeekCol + weekColChange) * COL_WIDTH);
 			}
 			currentDate = nextDate;
 		}
 
-		return [dataGroup, monthChange];
+		return [colGroup, monthChange];
 	}
 
-	render_month_labels() {
+	renderMonthLabels() {
 		// this.first_month_label = 1;
-		// if (this.firstWeekStart.getDate() > 8) {
+		// if (this.state.firstWeekStart.getDate() > 8) {
 		// 	this.first_month_label = 0;
 		// }
 		// this.last_month_label = 1;
@@ -2547,8 +2587,8 @@ class Heatmap extends BaseChart {
 		this.monthStartPoints.pop();
 
 		this.monthStartPoints.map((start, i) => {
-			let month_name =  this.monthNames[this.months[i]].substring(0, 3);
-			let text = makeText('y-value-text', start+12, 10, month_name);
+			let month_name = getMonthName(this.months[i], true);
+			let text = makeText('y-value-text', start + COL_WIDTH, HEATMAP_SQUARE_SIZE, month_name);
 			this.domainLabelGroup.appendChild(text);
 		});
 	}
@@ -2561,9 +2601,9 @@ class Heatmap extends BaseChart {
 				let count = e.target.getAttribute('data-value');
 				let dateParts = e.target.getAttribute('data-date').split('-');
 
-				let month = this.monthNames[parseInt(dateParts[1])-1].substring(0, 3);
+				let month = getMonthName(parseInt(dateParts[1])-1, true);
 
-				let gOff = this.chartWrapper.getBoundingClientRect(), pOff = e.target.getBoundingClientRect();
+				let gOff = this.container.getBoundingClientRect(), pOff = e.target.getBoundingClientRect();
 
 				let width = parseInt(e.target.getAttribute('width'));
 				let x = pOff.left - gOff.left + (width+2)/2;
@@ -2575,11 +2615,6 @@ class Heatmap extends BaseChart {
 				this.tip.showTip();
 			});
 		});
-	}
-
-	update(data) {
-		super.update(data);
-		this.bindTooltip();
 	}
 }
 
@@ -2719,7 +2754,7 @@ class AxisChart extends BaseChart {
 	}
 
 	configure(args) {
-		super.configure();
+		super.configure(args);
 
 		args.axisOptions = args.axisOptions || {};
 		args.tooltipOptions = args.tooltipOptions || {};
@@ -2736,8 +2771,8 @@ class AxisChart extends BaseChart {
 
 	setMargins() {
 		super.setMargins();
-		this.leftMargin = Y_AXIS_MARGIN;
-		this.rightMargin = Y_AXIS_MARGIN;
+		this.leftMargin = Y_AXIS_LEFT_MARGIN;
+		this.rightMargin = Y_AXIS_RIGHT_MARGIN;
 	}
 
 	prepareData(data=this.data) {
@@ -3042,12 +3077,12 @@ class AxisChart extends BaseChart {
 
 	bindTooltip() {
 		// NOTE: could be in tooltip itself, as it is a given functionality for its parent
-		this.chartWrapper.addEventListener('mousemove', (e) => {
-			let o = getOffset(this.chartWrapper);
+		this.container.addEventListener('mousemove', (e) => {
+			let o = getOffset(this.container);
 			let relX = e.pageX - o.left - this.leftMargin;
-			let relY = e.pageY - o.top - this.translateY;
+			let relY = e.pageY - o.top - this.topMargin;
 
-			if(relY < this.height + this.translateY * 2) {
+			if(relY < this.height + this.topMargin * 2) {
 				this.mapTooltipXPosition(relX);
 			} else {
 				this.tip.hideTip();
@@ -3074,7 +3109,7 @@ class AxisChart extends BaseChart {
 			// let delta = i === 0 ? s.unitWidth : xVal - s.xAxis.positions[i-1];
 			if(relX > xVal - s.unitWidth/2) {
 				let x = xVal + this.leftMargin;
-				let y = s.yExtremes[i] + this.translateY;
+				let y = s.yExtremes[i] + this.topMargin;
 
 				let values = this.data.datasets.map((set, j) => {
 					return {
@@ -3092,21 +3127,21 @@ class AxisChart extends BaseChart {
 	}
 
 	renderLegend() {
-		let s = this.data;
-		this.statsWrapper.textContent = '';
+		// let s = this.data;
+		// this.statsWrapper.textContent = '';
 
-		if(s.datasets.length > 1) {
-			s.datasets.map((d, i) => {
-				let stats = $.create('div', {
-					className: 'stats',
-					inside: this.statsWrapper
-				});
-				stats.innerHTML = `<span class="indicator">
-					<i style="background: ${this.colors[i]}"></i>
-					${d.name}
-				</span>`;
-			});
-		}
+		// if(s.datasets.length > 1) {
+		// 	s.datasets.map((d, i) => {
+		// 		let stats = $.create('div', {
+		// 			className: 'stats',
+		// 			inside: this.statsWrapper
+		// 		});
+		// 		stats.innerHTML = `<span class="indicator">
+		// 			<i style="background: ${this.colors[i]}"></i>
+		// 			${d.name}
+		// 		</span>`;
+		// 	});
+		// }
 	}
 
 	makeOverlay() {
@@ -3285,4 +3320,4 @@ class Chart {
 	}
 }
 
-export default Chart;
+export { Chart, PercentageChart, PieChart, Heatmap, AxisChart };

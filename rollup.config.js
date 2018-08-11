@@ -27,7 +27,7 @@ export default [
 				format: 'iife',
 			}
 		],
-		name: 'Chart',
+		name: 'frappe',
 		plugins: [
 			postcss({
 				preprocessor: (content, id) => new Promise((resolve, reject) => {
@@ -54,6 +54,43 @@ export default [
 				ENV: JSON.stringify(process.env.NODE_ENV || 'development'),
 			}),
 			uglify()
+		]
+	},
+	{
+		input: 'docs/assets/js/index.js',
+		sourcemap: true,
+		output: [
+			{
+				file: 'docs/assets/js/index.min.js',
+				format: 'iife',
+			}
+		],
+		name: 'frappe',
+		plugins: [
+			postcss({
+				preprocessor: (content, id) => new Promise((resolve, reject) => {
+					const result = sass.renderSync({ file: id })
+					resolve({ code: result.css.toString() })
+				}),
+				extensions: [ '.scss' ],
+				plugins: [
+					nested(),
+					cssnext({ warnForDuplicates: false }),
+					cssnano()
+				]
+			}),
+			eslint({
+				exclude: [
+					'src/scss/**'
+				]
+			}),
+			babel({
+				exclude: 'node_modules/**'
+			}),
+			replace({
+				exclude: 'node_modules/**',
+				ENV: JSON.stringify(process.env.NODE_ENV || 'development'),
+			})
 		]
 	},
 	{

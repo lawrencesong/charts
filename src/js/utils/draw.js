@@ -3,7 +3,7 @@ import { getBarHeightAndYAttr } from './draw-utils';
 import { getStringWidth } from './helpers';
 import { DOT_OVERLAY_SIZE_INCR } from './constants';
 
-const AXIS_TICK_LENGTH = 6;
+export const AXIS_TICK_LENGTH = 6;
 const LABEL_MARGIN = 4;
 export const FONT_SIZE = 10;
 const BASE_LINE_COLOR = '#dadada';
@@ -149,13 +149,13 @@ export function makeHeatSquare(className, x, y, size, fill='none', data={}) {
 	return createSVG("rect", args);
 }
 
-export function makeText(className, x, y, content) {
+export function makeText(className, x, y, content, fontSize = FONT_SIZE) {
 	return createSVG('text', {
 		className: className,
 		x: x,
 		y: y,
-		dy: (FONT_SIZE / 2) + 'px',
-		'font-size': FONT_SIZE + 'px',
+		dy: (fontSize / 2) + 'px',
+		'font-size': fontSize + 'px',
 		innerHTML: content
 	});
 }
@@ -495,6 +495,25 @@ export let makeOverlay = {
 			overlay.setAttribute('transform', transformValue);
 		}
 		return overlay;
+	},
+
+	'heat_square': (unit) => {
+		let transformValue;
+		if(unit.nodeName !== 'circle') {
+			transformValue = unit.getAttribute('transform');
+			unit = unit.childNodes[0];
+		}
+		let overlay = unit.cloneNode();
+		let radius = unit.getAttribute('r');
+		let fill = unit.getAttribute('fill');
+		overlay.setAttribute('r', parseInt(radius) + DOT_OVERLAY_SIZE_INCR);
+		overlay.setAttribute('fill', fill);
+		overlay.style.opacity = '0.6';
+
+		if(transformValue) {
+			overlay.setAttribute('transform', transformValue);
+		}
+		return overlay;
 	}
 };
 
@@ -533,5 +552,23 @@ export let updateOverlay = {
 		if(transformValue) {
 			overlay.setAttribute('transform', transformValue);
 		}
-	}
+	},
+
+	'heat_square': (unit, overlay) => {
+		let transformValue;
+		if(unit.nodeName !== 'circle') {
+			transformValue = unit.getAttribute('transform');
+			unit = unit.childNodes[0];
+		}
+		let attributes = ['cx', 'cy'];
+		Object.values(unit.attributes)
+			.filter(attr => attributes.includes(attr.name) && attr.specified)
+			.map(attr => {
+				overlay.setAttribute(attr.name, attr.nodeValue);
+			});
+
+		if(transformValue) {
+			overlay.setAttribute('transform', transformValue);
+		}
+	},
 };

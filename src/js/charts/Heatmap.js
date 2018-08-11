@@ -1,81 +1,31 @@
 import BaseChart from './BaseChart';
 import { makeSVGGroup, makeHeatSquare, makeText } from '../utils/draw';
-import { addDays, getDdMmYyyy, getWeeksBetween } from '../utils/date-utils';
+import { addDays, setDayToSunday, getDdMmYyyy, getWeeksBetween, getMonthName, clone,
+	NO_OF_MILLIS, NO_OF_YEAR_MONTHS, NO_OF_DAYS_IN_WEEK } from '../utils/date-utils';
 import { calcDistribution, getMaxCheckpoint } from '../utils/intervals';
-import { isValidColor } from '../utils/colors';
+import { HEATMAP_DISTRIBUTION_SIZE, HEATMAP_SQUARE_SIZE,
+	HEATMAP_GUTTER_SIZE } from '../utils/constants';
+
+const COL_WIDTH = HEATMAP_SQUARE_SIZE + HEATMAP_GUTTER_SIZE;
+const ROW_HEIGHT = COL_WIDTH;
+const DAY_INCR = 1;
 
 export default class Heatmap extends BaseChart {
 	constructor(parent, options) {
 		super(parent, options);
-
 		this.type = 'heatmap';
 
-		this.domain = options.domain || '';
-		this.subdomain = options.subdomain || '';
-		this.data = options.data || {};
 		this.discreteDomains = options.discreteDomains === 0 ? 0 : 1;
 		this.countLabel = options.countLabel || '';
 
-		let today = new Date();
-		this.start = options.start || addDays(today, 365);
-
-		let legendColors = (options.legendColors || []).slice(0, 5);
-		this.legendColors = this.validate_colors(legendColors)
-			? legendColors
-			: ['#ebedf0', '#c6e48b', '#7bc96f', '#239a3b', '#196127'];
-
-		// Fixed 5-color theme,
-		// More colors are difficult to parse visually
-		this.distribution_size = 5;
-
-		this.translateX = 0;
 		this.setup();
 	}
 
-	setMargins() {
-		super.setMargins();
-		this.leftMargin = 10;
-		this.translateY = 10;
-	}
-
-	validate_colors(colors) {
-		if(colors.length < 5) return 0;
-
-		let valid = 1;
-		colors.forEach(function(string) {
-			if(!isValidColor(string)) {
-				valid = 0;
-				console.warn('"' + string + '" is not a valid color.');
-			}
-		}, this);
-
-		return valid;
-	}
-
-	configure() {
-		super.configure();
-		this.today = new Date();
-
-		if(!this.start) {
-			this.start = new Date();
-			this.start.setFullYear( this.start.getFullYear() - 1 );
-		}
-		this.firstWeekStart = new Date(this.start.toDateString());
-		this.lastWeekStart = new Date(this.today.toDateString());
-		if(this.firstWeekStart.getDay() !== 7) {
-			addDays(this.firstWeekStart, (-1) * this.firstWeekStart.getDay());
-		}
-		if(this.lastWeekStart.getDay() !== 7) {
-			addDays(this.lastWeekStart, (-1) * this.lastWeekStart.getDay());
-		}
-		this.no_of_cols = getWeeksBetween(this.firstWeekStart + '', this.lastWeekStart + '') + 1;
-	}
-
-	calcWidth() {
-		this.baseWidth = (this.no_of_cols + 3) * 12 ;
+	updateWidth() {
+		this.baseWidth = (this.state.noOfWeeks + 99) * COL_WIDTH;
 
 		if(this.discreteDomains) {
-			this.baseWidth += (12 * 12);
+			this.baseWidth += (COL_WIDTH * NO_OF_YEAR_MONTHS);
 		}
 	}
 
@@ -84,112 +34,115 @@ export default class Heatmap extends BaseChart {
 		this.domainLabelGroup = makeSVGGroup(this.drawArea,
 			'domain-label-group chart-label');
 
-		this.dataGroups = makeSVGGroup(this.drawArea,
+		this.colGroups = makeSVGGroup(this.drawArea,
 			'data-groups',
 			`translate(0, 20)`
 		);
+	}
 
-		this.container.querySelector('.title').style.display = 'None';
-		this.container.querySelector('.sub-title').style.display = 'None';
-		this.container.querySelector('.graph-stats-container').style.display = 'None';
-		this.chartWrapper.style.marginTop = '0px';
-		this.chartWrapper.style.paddingTop = '0px';
+	prepareData(data=this.data) {
+		if(data.start && data.end && data.start > data.end) {
+			throw new Error('Start date cannot be greater than end date.');
+		}
+
+		if(!data.start) {
+			data.start = new Date();
+			data.start.setFullYear( data.start.getFullYear() - 1 );
+		}
+		if(!data.end) { data.end = new Date(); }
+		data.dataPoints = data.dataPoints || {};
+
+		if(parseInt(Object.keys(data.dataPoints)[0]) > 100000) {
+			let points = {};
+			Object.keys(data.dataPoints).forEach(timestampSec => {
+				let date = new Date(timestampSec * NO_OF_MILLIS);
+				points[getDdMmYyyy(date)] = data.dataPoints[timestampSec];
+			});
+			data.dataPoints = points;
+		}
+
+		return data;
 	}
 
 	calc() {
+		let s = this.state;
 
-		let dataValues = Object.keys(this.data).map(key => this.data[key]);
-		this.distribution = calcDistribution(dataValues, this.distribution_size);
+		s.start = this.data.start;
+		s.end = this.data.end;
 
-		this.monthNames = ["January", "February", "March", "April", "May", "June",
-			"July", "August", "September", "October", "November", "December"
-		];
+		s.firstWeekStart = setDayToSunday(clone(s.start));
+		s.noOfWeeks = getWeeksBetween(s.firstWeekStart, s.end);
+		s.distribution = calcDistribution(
+			Object.values(this.data.dataPoints), HEATMAP_DISTRIBUTION_SIZE);
+	}
+
+	update(data) {
+		if(!data) {
+			console.error('No data to update.');
+		}
+		this.data = this.prepareData(data);
+		this.draw();
+		this.bindTooltip();
 	}
 
 	render() {
-		this.renderAllWeeksAndStoreXValues(this.no_of_cols);
-	}
-
-	renderAllWeeksAndStoreXValues(no_of_weeks) {
-		// renderAllWeeksAndStoreXValues
 		this.domainLabelGroup.textContent = '';
-		this.dataGroups.textContent = '';
+		this.colGroups.textContent = '';
 
-		let currentWeekSunday = new Date(this.firstWeekStart);
-		this.weekCol = 0;
+		let currentWeekSunday = new Date(this.state.firstWeekStart);
+		this.currentWeekCol = 0;
 		this.currentMonth = currentWeekSunday.getMonth();
 
 		this.months = [this.currentMonth + ''];
-		this.monthWeeks = {}, this.monthStartPoints = [];
+		this.monthWeeks = {},
+		this.monthStartPoints = [];
 		this.monthWeeks[this.currentMonth] = 0;
-		this.monthStartPoints.push(13);
 
-		for(var i = 0; i < no_of_weeks; i++) {
-			let dataGroup, monthChange = 0;
+		for(var i = 0; i < this.state.noOfWeeks; i++) {
+			let colGroup, monthChange = 0;
 			let day = new Date(currentWeekSunday);
 
-			[dataGroup, monthChange] = this.get_week_squares_group(day, this.weekCol);
-			this.dataGroups.appendChild(dataGroup);
-			this.weekCol += 1 + parseInt(this.discreteDomains && monthChange);
+			[colGroup, monthChange] = this.getWeekSquaresGroup(day, this.currentWeekCol);
+			this.colGroups.appendChild(colGroup);
+			this.currentWeekCol += 1 + parseInt(this.discreteDomains && monthChange);
 			this.monthWeeks[this.currentMonth]++;
 			if(monthChange) {
-				this.currentMonth = (this.currentMonth + 1) % 12;
+				this.currentMonth = (this.currentMonth + 1) % NO_OF_YEAR_MONTHS;
 				this.months.push(this.currentMonth + '');
 				this.monthWeeks[this.currentMonth] = 1;
 			}
-			addDays(currentWeekSunday, 7);
+			addDays(currentWeekSunday, NO_OF_DAYS_IN_WEEK);
 		}
-		this.render_month_labels();
+		this.renderMonthLabels();
 	}
 
-	get_week_squares_group(currentDate, index) {
-		const noOfWeekdays = 7;
-		const squareSide = 10;
-		const cellPadding = 2;
-		const step = 1;
-		const todayTime = this.today.getTime();
-
+	getWeekSquaresGroup(currentDate, currentWeekCol) {
 		let monthChange = 0;
 		let weekColChange = 0;
 
-		let dataGroup = makeSVGGroup(this.dataGroups, 'data-group');
+		let colGroup = makeSVGGroup(this.colGroups, 'data-group');
 
-		for(var y = 0, i = 0; i < noOfWeekdays; i += step, y += (squareSide + cellPadding)) {
-			let dataValue = 0;
-			let colorIndex = 0;
+		for(var y = 0, i = 0; i < NO_OF_DAYS_IN_WEEK; i += DAY_INCR, y += ROW_HEIGHT) {
+			let ddmmyyyy = getDdMmYyyy(currentDate);
+			let dataValue = this.data.dataPoints[ddmmyyyy] || 0;
+			let colorIndex = getMaxCheckpoint(dataValue, this.state.distribution);
 
-			let currentTimestamp = currentDate.getTime()/1000;
-			let timestamp = Math.floor(currentTimestamp - (currentTimestamp % 86400)).toFixed(1);
-
-			if(this.data[timestamp]) {
-				dataValue = this.data[timestamp];
-			}
-
-			if(this.data[Math.round(timestamp)]) {
-				dataValue = this.data[Math.round(timestamp)];
-			}
-
-			if(dataValue) {
-				colorIndex = getMaxCheckpoint(dataValue, this.distribution);
-			}
-
-			let x = 13 + (index + weekColChange) * 12;
+			let x = (currentWeekCol + weekColChange) * COL_WIDTH;
 
 			let dataAttr = {
-				'data-date': getDdMmYyyy(currentDate),
+				'data-date': ddmmyyyy,
 				'data-value': dataValue,
 				'data-day': currentDate.getDay()
 			};
 
-			let heatSquare = makeHeatSquare('day', x, y, squareSide,
-				this.legendColors[colorIndex], dataAttr);
+			let heatSquare = makeHeatSquare('day', x, y, HEATMAP_SQUARE_SIZE,
+				this.colors[colorIndex], dataAttr);
 
-			dataGroup.appendChild(heatSquare);
+			colGroup.appendChild(heatSquare);
 
 			let nextDate = new Date(currentDate);
 			addDays(nextDate, 1);
-			if(nextDate.getTime() > todayTime) break;
-
+			if(nextDate > this.state.end) break;
 
 			if(nextDate.getMonth() - currentDate.getMonth()) {
 				monthChange = 1;
@@ -197,17 +150,17 @@ export default class Heatmap extends BaseChart {
 					weekColChange = 1;
 				}
 
-				this.monthStartPoints.push(13 + (index + weekColChange) * 12);
+				this.monthStartPoints.push((currentWeekCol + weekColChange) * COL_WIDTH);
 			}
 			currentDate = nextDate;
 		}
 
-		return [dataGroup, monthChange];
+		return [colGroup, monthChange];
 	}
 
-	render_month_labels() {
+	renderMonthLabels() {
 		// this.first_month_label = 1;
-		// if (this.firstWeekStart.getDate() > 8) {
+		// if (this.state.firstWeekStart.getDate() > 8) {
 		// 	this.first_month_label = 0;
 		// }
 		// this.last_month_label = 1;
@@ -226,8 +179,8 @@ export default class Heatmap extends BaseChart {
 		this.monthStartPoints.pop();
 
 		this.monthStartPoints.map((start, i) => {
-			let month_name =  this.monthNames[this.months[i]].substring(0, 3);
-			let text = makeText('y-value-text', start+12, 10, month_name);
+			let month_name = getMonthName(this.months[i], true);
+			let text = makeText('y-value-text', start + COL_WIDTH, HEATMAP_SQUARE_SIZE, month_name);
 			this.domainLabelGroup.appendChild(text);
 		});
 	}
@@ -240,9 +193,9 @@ export default class Heatmap extends BaseChart {
 				let count = e.target.getAttribute('data-value');
 				let dateParts = e.target.getAttribute('data-date').split('-');
 
-				let month = this.monthNames[parseInt(dateParts[1])-1].substring(0, 3);
+				let month = getMonthName(parseInt(dateParts[1])-1, true);
 
-				let gOff = this.chartWrapper.getBoundingClientRect(), pOff = e.target.getBoundingClientRect();
+				let gOff = this.container.getBoundingClientRect(), pOff = e.target.getBoundingClientRect();
 
 				let width = parseInt(e.target.getAttribute('width'));
 				let x = pOff.left - gOff.left + (width+2)/2;
@@ -254,10 +207,5 @@ export default class Heatmap extends BaseChart {
 				this.tip.showTip();
 			});
 		});
-	}
-
-	update(data) {
-		super.update(data);
-		this.bindTooltip();
 	}
 }

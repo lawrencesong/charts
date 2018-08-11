@@ -1,9 +1,9 @@
 /* eslint-disable */
 import BaseChart from './BaseChart';
 import { dataPrep, zeroDataPrep, getShortenedLabels } from '../utils/axis-chart-utils';
-import { Y_AXIS_MARGIN } from '../utils/constants';
+import { Y_AXIS_LEFT_MARGIN, Y_AXIS_RIGHT_MARGIN } from '../utils/constants';
 import { getComponent } from '../objects/ChartComponents';
-import { $, getOffset, fire } from '../utils/dom';
+import { getOffset, fire } from '../utils/dom';
 import { calcChartIntervals, getIntervalSize, getValueRange, getZeroIndex, scale } from '../utils/intervals';
 import { floatTwo } from '../utils/helpers';
 import { makeOverlay, updateOverlay } from '../utils/draw';
@@ -23,7 +23,7 @@ export default class AxisChart extends BaseChart {
 	}
 
 	configure(args) {
-		super.configure();
+		super.configure(args);
 
 		args.axisOptions = args.axisOptions || {};
 		args.tooltipOptions = args.tooltipOptions || {};
@@ -43,8 +43,8 @@ export default class AxisChart extends BaseChart {
 
 	setMargins() {
 		super.setMargins();
-		this.leftMargin = Y_AXIS_MARGIN;
-		this.rightMargin = Y_AXIS_MARGIN;
+		this.leftMargin = Y_AXIS_LEFT_MARGIN;
+		this.rightMargin = Y_AXIS_RIGHT_MARGIN;
 	}
 
 	prepareData(data=this.data) {
@@ -352,12 +352,12 @@ export default class AxisChart extends BaseChart {
 
 	bindTooltip() {
 		// NOTE: could be in tooltip itself, as it is a given functionality for its parent
-		this.chartWrapper.addEventListener('mousemove', (e) => {
-			let o = getOffset(this.chartWrapper);
+		this.container.addEventListener('mousemove', (e) => {
+			let o = getOffset(this.container);
 			let relX = e.pageX - o.left - this.leftMargin;
-			let relY = e.pageY - o.top - this.translateY;
+			let relY = e.pageY - o.top - this.topMargin;
 
-			if(relY < this.height + this.translateY * 2) {
+			if(relY < this.height + this.topMargin * 2) {
 				this.mapTooltipXPosition(relX);
 			} else {
 				this.tip.hideTip();
@@ -384,7 +384,7 @@ export default class AxisChart extends BaseChart {
 			// let delta = i === 0 ? s.unitWidth : xVal - s.xAxis.positions[i-1];
 			if(relX > xVal - s.unitWidth/2) {
 				let x = xVal + this.leftMargin;
-				let y = s.yExtremes[i] + this.translateY;
+				let y = s.yExtremes[i] + this.topMargin;
 
 				let values = this.data.datasets.map((set, j) => {
 					return {
@@ -402,21 +402,21 @@ export default class AxisChart extends BaseChart {
 	}
 
 	renderLegend() {
-		let s = this.data;
-		this.statsWrapper.textContent = '';
+		// let s = this.data;
+		// this.statsWrapper.textContent = '';
 
-		if(s.datasets.length > 1) {
-			s.datasets.map((d, i) => {
-				let stats = $.create('div', {
-					className: 'stats',
-					inside: this.statsWrapper
-				});
-				stats.innerHTML = `<span class="indicator">
-					<i style="background: ${this.colors[i]}"></i>
-					${d.name}
-				</span>`;
-			});
-		}
+		// if(s.datasets.length > 1) {
+		// 	s.datasets.map((d, i) => {
+		// 		let stats = $.create('div', {
+		// 			className: 'stats',
+		// 			inside: this.statsWrapper
+		// 		});
+		// 		stats.innerHTML = `<span class="indicator">
+		// 			<i style="background: ${this.colors[i]}"></i>
+		// 			${d.name}
+		// 		</span>`;
+		// 	});
+		// }
 	}
 
 	makeOverlay() {
