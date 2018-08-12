@@ -1,3 +1,4 @@
+// eslint-disable-next-line
 import BaseChart from './BaseChart';
 import { makeSVGGroup, makeHeatSquare, makeText } from '../utils/draw';
 import { addDays, setDayToSunday, getDdMmYyyy, getWeeksBetween, getMonthName, clone,

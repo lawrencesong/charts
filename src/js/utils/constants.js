@@ -1,3 +1,4 @@
+// eslint-disable-next-line
 export const ALL_CHART_TYPES = ['line', 'scatter', 'bar', 'percentage', 'heatmap', 'pie'];
 
 export const COMPATIBLE_CHARTS = {

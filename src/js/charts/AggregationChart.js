@@ -1,3 +1,4 @@
+// eslint-disable-next-line
 import BaseChart from './BaseChart';
 
 export default class AggregationChart extends BaseChart {

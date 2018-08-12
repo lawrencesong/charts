@@ -1,3 +1,4 @@
+// eslint-disable-next-line
 import AggregationChart from './AggregationChart';
 import { $, getOffset } from '../utils/dom';
 

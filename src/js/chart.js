@@ -1,42 +1,38 @@
-// import '../scss/charts.scss';
+// import "../css/charts.scss";
 
 // import MultiAxisChart from './charts/MultiAxisChart';
-// import PercentageChart from './charts/PercentageChart';
-// import PieChart from './charts/PieChart';
-// import Heatmap from './charts/Heatmap';
-import AxisChart from './charts/AxisChart';
+import PercentageChart from "./charts/PercentageChart";
+import PieChart from "./charts/PieChart";
+import Heatmap from "./charts/Heatmap";
+import AxisChart from "./charts/AxisChart";
 
-// const chartTypes = {
-// 	// multiaxis: MultiAxisChart,
-// 	percentage: PercentageChart,
-// 	heatmap: Heatmap,
-// 	pie: PieChart
-// };
+const chartTypes = {
+  bar: AxisChart,
+  line: AxisChart,
+  // multiaxis: MultiAxisChart,
+  percentage: PercentageChart,
+  heatmap: Heatmap,
+  pie: PieChart
+};
 
-function getChartByType(chartType = 'line', parent, options) {
-	if(chartType === 'line') {
-		options.type = 'line';
-		return new AxisChart(parent, options);
-	} else if (chartType === 'bar') {
-		options.type = 'bar';
-		return new AxisChart(parent, options);
-	} else if (chartType === 'axis-mixed') {
-		options.type = 'line';
-		return new AxisChart(parent, options);
-	}
+function getChartByType(chartType = "line", parent, options) {
+  if (chartType === "axis-mixed") {
+    options.type = "line";
+    return new AxisChart(parent, options);
+  }
 
-	// if (!chartTypes[chartType]) {
-		console.error("Undefined chart type: " + chartType);
-	// 	return;
-	// }
-  //
-	// return new chartTypes[chartType](parent, options);
+  if (!chartTypes[chartType]) {
+    console.error("Undefined chart type: " + chartType);
+    return;
+  }
+
+  return new chartTypes[chartType](parent, options);
 }
 
 class Chart {
-	constructor(parent, options) {
-		return getChartByType(options.type, parent, options);
-	}
+  constructor(parent, options) {
+    return getChartByType(options.type, parent, options);
+  }
 }
 
 export { Chart, PercentageChart, PieChart, Heatmap, AxisChart };

@@ -210,8 +210,13 @@ export default class AxisChart extends BaseChart {
 				},
 				function() {
 					let s = this.state;
+
 					s.xAxis.calcLabels = getShortenedLabels(this.width,
 						s.xAxis.labels, this.config.xIsSeries);
+
+					if (this.rawChartArgs.calculatedLabels) {
+						s.xAxis.calcLabels = this.rawChartArgs.calculatedLabels;
+					}
 
 					return s.xAxis;
 				}.bind(this)
